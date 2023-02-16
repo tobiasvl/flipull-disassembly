@@ -9,17 +9,17 @@ Disassembling
 The disassembly was created like this (from the ROM `flipull.gb`, which must be supplied):
 
 ```
-python mgbdis/mgbdis.py --output-dir . --print-hex --uppercase-db --align-operands --uppercase-hex --ldh_a8 ldh_ffa8 --ld_c ldh_c --overwrite --tiny flipull.gb
+python mgbdis/mgbdis.py --disable-halt-nops --disable-auto-ldh --output-dir . --print-hex --uppercase-db --align-operands --uppercase-hex --ldh_a8 ldh_ffa8 --ld_c ldh_c --tiny --overwrite flipull.gb
 ```
 
-I will create a `flipull.sym` file and add to it manually as I discover things, and then re-disassemble with the above command.
+The `flipull.sym` file is manually created and updated; I add to it manually as I discover things, and then re-disassemble with the above command.
 
 At some point (when I want to do something that `mgbdis` can't reproduce) I will then remove the `mgbdis` dependency and the manual `flipull.sym` file, and do the rest by hand.
 
 Reassembling
 ------------
 
-Just run
+You'll need [RGBDS](https://github.com/rednex/rgbds). Then just run
 
 ```
 make

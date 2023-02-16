@@ -5,3 +5,6 @@
 
 INCLUDE "hardware.inc"
 INCLUDE "bank_000.asm"
+INCLUDE "vram.asm"
+INCLUDE "wram.asm"
+INCLUDE "hram.asm"

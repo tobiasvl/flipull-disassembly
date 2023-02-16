@@ -1,0 +1,371 @@
+00:0150 Init
+00:01EE .waitForJoypad
+00:01F5 .waitForVBlank
+00:01FF VBlankInterruptHandler
+00:05A3 TimerInterruptHandler
+00:0780 SerialInterruptHandler
+00:06B1 .jr_000_06B1
+00:06B7 .jr_000_06B7
+00:06D9 .jr_000_06D9
+00:06F4 .jr_000_06F4
+00:0700 .jr_000_0700
+00:0715 .jr_000_0715
+00:071D .tickClock
+00:0731 .decrementSeconds
+00:0741 .decrement
+00:0745 .return
+00:074A .jr_000_074A
+00:0764 .jr_000_0764
+00:0773 .jr_000_0773
+00:078E ShuffleBlockRNG
+00:0798 .dontRollOver
+00:0A2D StartGame
+00:0B02 Start2PlayerGame
+00:1424 .compareHiScoreDigit
+00:1431 .newHiScore
+
+00:1676 .incrementStageNumber
+00:1681 .noCarry
+
+00:1693 UnusedTransitionAnimations
+
+00:16D4 .transitionStage10
+00:16DE .transitionStage20
+00:16E8 .transitionStage30
+
+00:2BFC ReadJoypad
+00:2C2E .return
+00:2C33 SetUpDMA
+00:2C3A .loop
+00:2C41 DMARoutine
+00:2C47 .loop
+00:2C9E JumpTable
+00:2CB0 .waitForVblank
+00:2CD0 .loop
+00:2CCA ClearScreen
+00:2CC1 MemClear
+00:2CAA LCDOff
+00:2CE2 ExecuteDrawCommands
+00:2CEC ExecuteDrawCommands.getNextDrawCommand
+00:2CF2 ExecuteDrawCommand
+00:2D05 .horizontalDraw
+00:2D0C .horizontalStamp
+00:2D0E .loop
+00:2D13 .verticalDraw
+00:2D20 .verticalStamp
+00:2D2D ExecuteDrawCommandsToWRAM
+00:2D3B ExecuteDrawCommandsToWRAM.getNextDrawCommand
+00:2D41 InitNewGame
+00:2D47 InitNewGame.continue
+00:2D55 LoadStage
+00:2D5E .convertStageNumberFromBCD
+00:2D63 .convertStageNumberToTablePointer
+00:2D6D LoadStage.loadStageData
+00:2DA3 LoadAttractModeStage
+00:2DAC MemCpyDEtoHLReverse
+00:2DB3 MemCpyDEtoWRAM
+00:2CD9 MemCpyHLtoDE
+00:2DB6 MemCpyDEtoHLShort
+
+00:30F9 .incrementStageNumber
+00:3104 .noCarry
+
+00:3125 SerialTransferHandler
+
+00:333D TitleScreenDrawCommand
+00:333D .data:B2
+
+00:33EF PlayAreaDrawCommand
+00:33EF .data:5F
+
+00:344E StageNumberDrawCommand
+00:344E .data:D
+
+00:345B GameOverDrawCommand
+00:345B .data:D
+
+00:3468 UnknownDrawCommand1
+00:3468 .data:56
+
+00:34BE UnknownDrawCommand2
+00:34BE .data:27
+
+00:34E5 UnknownDrawCommand3
+00:34E5 .data:2B
+
+00:3510 SetDrawCommand
+00:3510 .data:9
+
+00:3519 BigBlockFrameDrawCommand
+00:3519 .data:103
+
+00:361C YouLoseBigTextDrawCommand
+00:361C .data:19
+
+00:3635 UnknownDrawCommand7
+00:3635 .data:1B
+
+00:3650 UnknownDrawCommand8
+00:3650 .data:19
+
+00:3669 StageDrawCommandsTable
+00:3669 .data:60
+
+00:36C9 Stage1DrawCommand
+00:36C9 .data:11
+
+00:36DA Stage2DrawCommand
+00:36DA .data:0D
+
+00:36E7 Stage3DrawCommand
+00:36E7 .data:0D
+
+00:36F4 Stage4DrawCommand
+00:36F4 .data:0D
+
+00:3701 Stage5DrawCommand
+00:3701 .data:15
+
+00:3716 Stage6DrawCommand
+00:3716 .data:12
+
+00:3728 Stage7DrawCommand
+00:3728 .data:19
+
+00:3741 Stage8DrawCommand
+00:3741 .data:15
+
+00:3756 Stage9DrawCommand
+00:3756 .data:11
+
+00:3767 Stage10DrawCommand
+00:3767 .data:15
+
+00:377C Stage11DrawCommand
+00:377C .data:D
+
+00:3789 Stage12DrawCommand
+00:3789 .data:1A1
+
+00:37AE Stage13DrawCommand
+
+00:37BF Stage14DrawCommand
+
+00:37CC Stage15DrawCommand
+
+00:37E5 Stage16DrawCommand
+
+00:37FA Stage17DrawCommand
+
+00:3807 Stage18DrawCommand
+
+00:3828 Stage19DrawCommand
+
+00:382D Stage20DrawCommand
+
+00:3842 Stage21DrawCommand
+
+00:3857 Stage22DrawCommand
+
+00:386C Stage23DrawCommand
+
+00:3879 Stage24DrawCommand
+
+00:3892 Stage25DrawCommand
+
+00:38AB Stage26DrawCommand
+
+00:38B8 Stage27DrawCommand
+
+00:38C1 Stage28DrawCommand
+
+00:38D6 Stage29DrawCommand
+
+00:38EF Stage30DrawCommand
+
+00:3908 Stage31DrawCommand
+
+00:3919 Stage32DrawCommand
+
+00:392A PushText
+00:392A .data:0C
+
+00:3936 StartText
+00:3936 .data:0C
+
+00:3942 ToText
+00:3942 .data:0C
+
+00:394E ContinueText
+00:394E .data:0C
+
+00:395A GameOverText
+00:395A .data:0C
+
+00:3966 BlankText
+00:3966 .data:0C
+
+00:3972 PauseText
+00:3972 .data:0C
+
+00:397E ClearText
+00:397E .data:0C
+
+00:398A PerfectText
+00:398A .data:0C
+
+00:3996 TimeBonusText
+00:3996 .data:0C
+
+00:39BA TimeUpText
+00:39BA .data:0C
+
+00:39C6 SorryText
+00:39C6 .data:0C
+
+00:39A2 X10Text
+00:39A2 .data:0C
+
+00:39AE ClearBonusText
+00:39AE .data:0C
+
+00:39D2 YouHaveText
+00:39D2 .data:0C
+
+00:39DE NoNextMoveText
+00:39DE .data:0C
+
+00:39EA BlockSeed
+00:39EA .data:24
+
+00:3A0E StageTable
+00:3A0E .data:60
+
+00:3A6E StageData
+00:3A6E .data:60
+
+00:3ACE Tiles
+00:3ACE .image:1800
+
+00:52CE OAMBlocks
+00:52CE .data:4
+00:52D2 .data:4
+00:52D6 .data:4
+00:52DA .data:4
+00:52DE .data:4
+00:52E2 .data:4
+00:52E6 .data:4
+00:52EA .data:4
+00:52EE .data:4
+00:52F2 .data:4
+00:52F6 .data:4
+00:52FA .data:4
+00:52FE .data:4
+00:5302 .data:4
+00:5336 .data:0C
+
+00:5306 TransitionStage10OAM
+00:5306 .data:30
+
+00:5342 TransitionStage20OAM
+00:5342 .data:20
+
+00:5362 TransitionStage30OAM
+00:5362 .data:30
+
+00:5392 BigBlobTilemaps1
+00:5392 .data:28
+
+00:53BA BigSquareBlockOAM1
+00:53BA .data:10
+
+00:53CA TransitionStage40OAM
+00:53CA .data:30
+
+00:53FA BigBlobOAM1
+00:53FA .data:10
+
+00:540A BigBlobOAM2
+00:540A .data:10
+
+00:541A BigBlobOAM3
+00:541A .data:10
+
+00:542A BigBlobWalkingLeftOAM1
+00:542A .data:18
+
+00:5442 BigFourBlocksOAM
+00:5442 .data:40
+
+00:5482 BigBlobWalkingRightOAM
+00:5482 .data:20
+
+00:54A2 BigBlobWalkingLeftOAM2
+00:54A2 .data:20
+
+00:54C2 BigBlobTilemaps2
+00:54C2 .data:24
+
+00:54E6 HurryUpTextOAM
+00:54E6 .data:40
+
+00:5526 Music
+00:5526 .data:10FB
+
+00:6621 GameOverMusic
+00:6621 .data:284
+
+00:68A5 EndOfROM
+00:68A5 .data:175B
+
+00:8000 _VRAM
+
+00:9890 vClearCount
+00:98F0 vEnemyBlocksCount
+00:9949 vTitleScreenHiScore
+00:9950 vBlocksCount
+00:99D1 vSBlockCount
+00:99AF vStageNumber
+
+00:C000 _RAM
+
+
+00:C120 wScore
+00:C126 wScore+6
+00:C130 wHiScore
+00:C136 wHiScore+6
+
+00:CA00 wBlockRNG
+00:CA30 wBlockRNGCounter
+
+00:CFFF wStack
+
+00:FF80 hDMARoutine
+
+00:FF8B hPressedButtonsMask
+00:FF8C hJoypadState
+
+00:FF91 hVBlankDone
+00:FF93 hIE
+
+00:FFB0 hCounter
+00:FFB1 hCounter+1
+
+00:FFC0 hBlocksInitial
+00:FFC1 hBlocksInitial+1
+00:FFC4 hCredits
+00:FFC5 hSBlocksRemaining
+00:FFC6 hStage
+00:FFC7 hStage+1
+00:FFC8 hStage+2
+00:FFC9 hBlocks
+00:FFCA hBlocks+1
+00:FFCB hSeconds
+00:FFCC hSeconds+1
+00:FFCD hUnknown
+00:FFCE hMinutes
+00:FFD0 hClearCount
+00:FFDD hMusic
+00:FFDE hMusic+1
+00:FFDF hMusic+2
+00:FFE0 hMusicSpeed

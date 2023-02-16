@@ -1,3 +1,5 @@
+IMAGE_DEPS = gfx/Tiles.2bpp
+
 all: game.gb
 
 %.2bpp: %.png
@@ -6,8 +8,8 @@ all: game.gb
 %.1bpp: %.png
 	rgbgfx -d 1 -o $@ $<
 
-game.o: game.asm bank_*.asm
-	rgbasm  -o game.o game.asm
+game.o: game.asm bank_*.asm $(IMAGE_DEPS)
+	rgbasm -h -L -o game.o game.asm
 
 game.gb: game.o
 	rgblink --tiny -n game.sym -m game.map -o $@ $<

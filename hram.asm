@@ -1,12 +1,8 @@
-SECTION "HRAM", HRAM[$FF80]
+SECTION "HRAM", HRAM[$FF8A]
 
-; FF80
-hDMARoutine::
-    ds 1
-
-; FF81-FF8A
+; FF8A
 ; Unknown
-    ds 10
+    ds 1
 
 ; FF8B
 hPressedButtonsMask::

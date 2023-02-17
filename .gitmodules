@@ -1,4 +1,0 @@
-[submodule "mgbdis"]
-	path = mgbdis
-	url = git@github.com:mattcurrie/mgbdis.git
-	branch = master

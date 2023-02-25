@@ -22,12 +22,13 @@ hVBlankDone::
     ds 1
 
 ; FF92
-; Unknown
+; Temporary storage of rIE during LCDOff
+hIE::
     ds 1
 
 ; FF93
 ; Copy of rIE. Seems unused.
-hIE::
+hIE2::
     ds 1
 
 ; FF94-FFAF

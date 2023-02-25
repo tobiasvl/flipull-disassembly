@@ -157,7 +157,7 @@ VBlankInterruptHandler::
     push bc                                       ; $0200: $C5
     push de                                       ; $0201: $D5
     push hl                                       ; $0202: $E5
-    call $FF80                                    ; $0203: $CD $80 $FF
+    call DMARoutine                               ; $0203: $CD $80 $FF
     ldh  a, [$FF9D]                               ; $0206: $F0 $9D
     cp   $04                                      ; $0208: $FE $04
     jr   z, .jr_000_0288                          ; $020A: $28 $7C
@@ -555,6 +555,7 @@ VBlankInterruptHandler::
 .Jump_000_050F:
     jr   nz, .jr_000_055A                         ; $050F: $20 $49
 
+    ; Redraw upper play area (blocks/pipes) after pause
     ld   hl, $9861                                ; $0511: $21 $61 $98
     ld   de, $C861                                ; $0514: $11 $61 $C8
     ld   b, $07                                   ; $0517: $06 $07
@@ -585,6 +586,7 @@ VBlankInterruptHandler::
 
 
 .jr_000_055A:
+    ; Redraw lower play area after pause
     ld   hl, $9921                                ; $055A: $21 $21 $99
     ld   de, $C921                                ; $055D: $11 $21 $C9
     ld   b, $07                                   ; $0560: $06 $07
@@ -1107,7 +1109,7 @@ jr_000_080E:
     jr   nz, jr_000_0839                          ; $0812: $20 $25
 
     ldh  a, [$FFAE]                               ; $0814: $F0 $AE
-    cp   $01                                      ; $0816: $FE $01
+    cp   PADF_A                                   ; $0816: $FE $01
     jr   nz, jr_000_0823                          ; $0818: $20 $09
 
     ld   a, $10                                   ; $081A: $3E $10
@@ -1132,13 +1134,13 @@ jr_000_0823:
 
 jr_000_0839:
     ldh  a, [$FFAE]                               ; $0839: $F0 $AE
-    cp   $01                                      ; $083B: $FE $01
+    cp   PADF_A                                   ; $083B: $FE $01
     ret  z                                        ; $083D: $C8
 
     ld   a, $01                                   ; $083E: $3E $01
     ldh  [$FFAE], a                               ; $0840: $E0 $AE
     ldh  a, [hPressedButtonsMask]                 ; $0842: $F0 $8B
-    cp   $08                                      ; $0844: $FE $08
+    cp   PADF_START                               ; $0844: $FE $08
     jr   nz, jr_000_089C                          ; $0846: $20 $54
 
     ldh  a, [$FF97]                               ; $0848: $F0 $97
@@ -1526,6 +1528,7 @@ StartGame::
     dec  b                                        ; $0ABA: $05
     jr   :-                                       ; $0ABB: $18 $F6
 
+; Initialize blocks, blob, etc
 :   call MemCpyDEtoHLReverse                      ; $0ABD: $CD $AC $2D
     ld   hl, vSBlockCount                         ; $0AC0: $21 $D1 $99
     ldh  a, [hSBlocksRemaining]                   ; $0AC3: $F0 $C5
@@ -1825,16 +1828,16 @@ jr_000_0CA1:
     ret  z                                        ; $0CAE: $C8
 
     ldh  a, [hPressedButtonsMask]                 ; $0CAF: $F0 $8B
-    cp   $01                                      ; $0CB1: $FE $01
+    cp   PADF_A                                   ; $0CB1: $FE $01
     jr   z, jr_000_0CD0                           ; $0CB3: $28 $1B
 
-    cp   $02                                      ; $0CB5: $FE $02
+    cp   PADF_B                                   ; $0CB5: $FE $02
     jr   z, jr_000_0CD0                           ; $0CB7: $28 $17
 
-    cp   $40                                      ; $0CB9: $FE $40
+    cp   PADF_UP                                  ; $0CB9: $FE $40
     jr   z, jr_000_0CC6                           ; $0CBB: $28 $09
 
-    cp   $80                                      ; $0CBD: $FE $80
+    cp   PADF_DOWN                                ; $0CBD: $FE $80
     ret  nz                                       ; $0CBF: $C0
 
     ld   a, $02                                   ; $0CC0: $3E $02
@@ -2110,7 +2113,7 @@ Jump_000_0E5D:
     jr   z, jr_000_0E78                           ; $0E61: $28 $15
 
     ldh  a, [hPressedButtonsMask]                 ; $0E63: $F0 $8B
-    bit  3, a                                     ; $0E65: $CB $5F
+    bit  PADB_START, a                            ; $0E65: $CB $5F
     jr   z, jr_000_0E78                           ; $0E67: $28 $0F
 
     ldh  a, [$FFAE]                               ; $0E69: $F0 $AE
@@ -2290,16 +2293,16 @@ jr_000_0F3D:
 
 jr_000_0F55:
     ldh  a, [hPressedButtonsMask]                 ; $0F55: $F0 $8B
-    cp   $01                                      ; $0F57: $FE $01
+    cp   PADF_A                                   ; $0F57: $FE $01
     jr   z, jr_000_0F76                           ; $0F59: $28 $1B
 
-    cp   $02                                      ; $0F5B: $FE $02
+    cp   PADF_B                                   ; $0F5B: $FE $02
     jr   z, jr_000_0F76                           ; $0F5D: $28 $17
 
-    cp   $40                                      ; $0F5F: $FE $40
+    cp   PADF_UP                                  ; $0F5F: $FE $40
     jr   z, jr_000_0F6C                           ; $0F61: $28 $09
 
-    cp   $80                                      ; $0F63: $FE $80
+    cp   PADF_DOWN                                ; $0F63: $FE $80
     ret  nz                                       ; $0F65: $C0
 
     ld   a, $02                                   ; $0F66: $3E $02
@@ -2441,7 +2444,7 @@ Jump_000_101B:
     ret  z                                        ; $102B: $C8
 
     ldh  a, [hPressedButtonsMask]                 ; $102C: $F0 $8B
-    bit  3, a                                     ; $102E: $CB $5F
+    bit  PADB_START, a                            ; $102E: $CB $5F
     ret  z                                        ; $1030: $C8
 
     ld   a, $01                                   ; $1031: $3E $01
@@ -2482,7 +2485,7 @@ jr_000_1055:
     ret  z                                        ; $1065: $C8
 
     ldh  a, [hPressedButtonsMask]                 ; $1066: $F0 $8B
-    bit  3, a                                     ; $1068: $CB $5F
+    bit  PADB_START, a                            ; $1068: $CB $5F
     ret  z                                        ; $106A: $C8
 
     ld   a, $01                                   ; $106B: $3E $01
@@ -2943,7 +2946,7 @@ Jump_000_12E4:
     ld   a, $01                                   ; $12F7: $3E $01
     ldh  [$FFAE], a                               ; $12F9: $E0 $AE
     ldh  a, [hPressedButtonsMask]                 ; $12FB: $F0 $8B
-    cp   $08                                      ; $12FD: $FE $08
+    cp   PADF_START                               ; $12FD: $FE $08
     jr   nz, :+                                   ; $12FF: $20 $08
 
     ld   a, $00                                   ; $1301: $3E $00
@@ -3009,7 +3012,7 @@ Jump_000_1368:
     ldh  [$FFAE], a                               ; $1374: $E0 $AE
     ldh  a, [hPressedButtonsMask]                 ; $1376: $F0 $8B
     ld   b, $04                                   ; $1378: $06 $04
-    cp   $04                                      ; $137A: $FE $04
+    cp   PADF_SELECT                              ; $137A: $FE $04
     jr   nz, jr_000_1397                          ; $137C: $20 $19
 
     ldh  a, [$FFC3]                               ; $137E: $F0 $C3
@@ -3085,7 +3088,7 @@ jr_000_13DE:
     ld   a, $01                                   ; $13EA: $3E $01
     ldh  [$FFAE], a                               ; $13EC: $E0 $AE
     ldh  a, [hPressedButtonsMask]                 ; $13EE: $F0 $8B
-    cp   $08                                      ; $13F0: $FE $08
+    cp   PADF_START                               ; $13F0: $FE $08
     jr   nz, jr_000_13FC                          ; $13F2: $20 $08
 
     ld   a, $00                                   ; $13F4: $3E $00
@@ -4091,7 +4094,7 @@ Jump_000_1973:
     jp   z, Jump_000_19E5                         ; $1983: $CA $E5 $19
 
     ldh  a, [hPressedButtonsMask]                 ; $1986: $F0 $8B
-    bit  3, a                                     ; $1988: $CB $5F
+    bit  PADB_START, a                            ; $1988: $CB $5F
     jp   z, Jump_000_19E5                         ; $198A: $CA $E5 $19
 
     ld   a, $01                                   ; $198D: $3E $01
@@ -5312,11 +5315,11 @@ jr_000_1FCA:
 
 jr_000_1FCD:
     ldh  a, [hPressedButtonsMask]                 ; $1FCD: $F0 $8B
-    cp   $08                                      ; $1FCF: $FE $08
+    cp   PADF_START                               ; $1FCF: $FE $08
     jp   z, Jump_000_130D                         ; $1FD1: $CA $0D $13
 
     ldh  a, [$FF9D]                               ; $1FD4: $F0 $9D
-    cp   $04                                      ; $1FD6: $FE $04
+    cp   PADF_SELECT                              ; $1FD6: $FE $04
     jp   z, Jump_000_20A2                         ; $1FD8: $CA $A2 $20
 
     ldh  a, [$FFA7]                               ; $1FDB: $F0 $A7
@@ -5608,20 +5611,20 @@ jr_000_2148:
     ldh  [$FFA6], a                               ; $216D: $E0 $A6
     ld   a, [$C006]                               ; $216F: $FA $06 $C0
     cp   [hl]                                     ; $2172: $BE
-    jr   z, jr_000_217D                           ; $2173: $28 $08
+    jr   z, .blockMatch                           ; $2173: $28 $08
 
     cp   $82                                      ; $2175: $FE $82
-    jr   nz, jr_000_2183                          ; $2177: $20 $0A
+    jr   nz, .blockMiss                          ; $2177: $20 $0A
 
     ld   a, [hl]                                  ; $2179: $7E
     ld   [$C006], a                               ; $217A: $EA $06 $C0
 
-jr_000_217D:
+.blockMatch:
     call Call_000_30CF                            ; $217D: $CD $CF $30
     jp   Jump_000_2256                            ; $2180: $C3 $56 $22
 
 
-jr_000_2183:
+.blockMiss:
     ldh  a, [$FFA6]                               ; $2183: $F0 $A6
     bit  4, a                                     ; $2185: $CB $67
     jr   z, jr_000_218C                           ; $2187: $28 $03
@@ -6904,7 +6907,7 @@ jr_000_2819:
 
 jr_000_2822:
     ldh  a, [hPressedButtonsMask]                 ; $2822: $F0 $8B
-    bit  6, a                                     ; $2824: $CB $77
+    bit  PADB_UP, a                               ; $2824: $CB $77
     jr   nz, jr_000_2859                          ; $2826: $20 $31
 
 jr_000_2828:
@@ -6934,7 +6937,7 @@ jr_000_282E:
 
 jr_000_2851:
     ldh  a, [hPressedButtonsMask]                 ; $2851: $F0 $8B
-    bit  7, a                                     ; $2853: $CB $7F
+    bit  PADB_DOWN, a                             ; $2853: $CB $7F
     jr   nz, jr_000_2859                          ; $2855: $20 $02
 
     jr   jr_000_2828                              ; $2857: $18 $CF
@@ -7652,7 +7655,7 @@ jr_000_2BED:
     jr   jr_000_2B9E                              ; $2BFA: $18 $A2
 
 ReadJoypad::
-    ld   a, $20                                   ; $2BFC: $3E $20
+    ld   a, P1F_GET_DPAD                          ; $2BFC: $3E $20
     ldh  [rP1], a                                 ; $2BFE: $E0 $00
     ldh  a, [rP1]                                 ; $2C00: $F0 $00
     ldh  a, [rP1]                                 ; $2C02: $F0 $00
@@ -7660,7 +7663,7 @@ ReadJoypad::
     and  $0F                                      ; $2C05: $E6 $0F
     swap a                                        ; $2C07: $CB $37
     ld   b, a                                     ; $2C09: $47
-    ld   a, $10                                   ; $2C0A: $3E $10
+    ld   a, P1F_GET_BTN                           ; $2C0A: $3E $10
     ldh  [rP1], a                                 ; $2C0C: $E0 $00
     ldh  a, [rP1]                                 ; $2C0E: $F0 $00
     ldh  a, [rP1]                                 ; $2C10: $F0 $00
@@ -7683,7 +7686,7 @@ ReadJoypad::
 
     ldh  [$FFAE], a                               ; $2C2C: $E0 $AE
 
-:   ld   a, $30                                   ; $2C2E: $3E $30
+:   ld   a, P1F_GET_NONE                          ; $2C2E: $3E $30
     ldh  [rP1], a                                 ; $2C30: $E0 $00
     ret                                           ; $2C32: $C9
 
@@ -7799,8 +7802,10 @@ JumpTable::
 
 LCDOff::
     ldh  a, [rIE]                                 ; $2CAA: $F0 $FF
-    ldh  [$FF92], a                               ; $2CAC: $E0 $92
+    ldh  [hIE], a                                 ; $2CAC: $E0 $92
     res  0, a                                     ; $2CAE: $CB $87
+    ; Possible bug: Doesn't load A back into rIE, so
+    ; interrupts aren't actually disabled here!
 
 ; Wait for VBlank
 :   ldh  a, [rLY]                                 ; $2CB0: $F0 $44
@@ -7810,7 +7815,7 @@ LCDOff::
     ldh  a, [rLCDC]                               ; $2CB6: $F0 $40
     and  $7F                                      ; $2CB8: $E6 $7F
     ldh  [rLCDC], a                               ; $2CBA: $E0 $40
-    ldh  a, [$FF92]                               ; $2CBC: $F0 $92
+    ldh  a, [hIE]                                 ; $2CBC: $F0 $92
     ldh  [rIE], a                                 ; $2CBE: $E0 $FF
     ret                                           ; $2CC0: $C9
 
@@ -8608,27 +8613,27 @@ jr_000_301D:
 Call_000_3029:
     ldh  a, [$FF97]                               ; $3029: $F0 $97
     cp   $00                                      ; $302B: $FE $00
-    jr   nz, jr_000_3050                          ; $302D: $20 $21
+    jr   nz, .jr_000_3050                          ; $302D: $20 $21
 
     ld   hl, $9921                                ; $302F: $21 $21 $99
     ld   de, $C921                                ; $3032: $11 $21 $C9
     ld   c, $06                                   ; $3035: $0E $06
 
-jr_000_3037:
+.nextRow:
     ld   b, $06                                   ; $3037: $06 $06
 
-jr_000_3039:
+.rowLoop:
     ld   a, [de]                                  ; $3039: $1A
     cp   $00                                      ; $303A: $FE $00
-    jr   nz, jr_000_3040                          ; $303C: $20 $02
+    jr   nz, .nextBlock                           ; $303C: $20 $02
 
     ld   a, $24                                   ; $303E: $3E $24
 
-jr_000_3040:
+.nextBlock:
     ld   [hl+], a                                 ; $3040: $22
     inc  de                                       ; $3041: $13
     dec  b                                        ; $3042: $05
-    jr   nz, jr_000_3039                          ; $3043: $20 $F4
+    jr   nz, .rowLoop                             ; $3043: $20 $F4
 
     dec  c                                        ; $3045: $0D
     ret  z                                        ; $3046: $C8
@@ -8638,12 +8643,12 @@ jr_000_3040:
     add  $21                                      ; $304A: $C6 $21
     ld   l, a                                     ; $304C: $6F
     ld   e, a                                     ; $304D: $5F
-    jr   jr_000_3037                              ; $304E: $18 $E7
+    jr   .nextRow                                 ; $304E: $18 $E7
 
-jr_000_3050:
+.jr_000_3050:
     ldh  a, [$FF9C]                               ; $3050: $F0 $9C
     cp   $00                                      ; $3052: $FE $00
-    jr   nz, jr_000_307B                          ; $3054: $20 $25
+    jr   nz, .jr_000_307B                          ; $3054: $20 $25
 
     ld   a, $01                                   ; $3056: $3E $01
     ldh  [$FF9C], a                               ; $3058: $E0 $9C
@@ -8651,21 +8656,21 @@ jr_000_3050:
     ld   de, $C941                                ; $305D: $11 $41 $C9
     ld   c, $05                                   ; $3060: $0E $05
 
-jr_000_3062:
+.jr_000_3062:
     ld   b, $08                                   ; $3062: $06 $08
 
-jr_000_3064:
+.jr_000_3064:
     ld   a, [de]                                  ; $3064: $1A
     cp   $00                                      ; $3065: $FE $00
-    jr   nz, jr_000_306B                          ; $3067: $20 $02
+    jr   nz, .jr_000_306B                          ; $3067: $20 $02
 
     ld   a, $24                                   ; $3069: $3E $24
 
-jr_000_306B:
+.jr_000_306B:
     ld   [hl+], a                                 ; $306B: $22
     inc  de                                       ; $306C: $13
     dec  b                                        ; $306D: $05
-    jr   nz, jr_000_3064                          ; $306E: $20 $F4
+    jr   nz, .jr_000_3064                          ; $306E: $20 $F4
 
     dec  c                                        ; $3070: $0D
     ret  z                                        ; $3071: $C8
@@ -8675,30 +8680,30 @@ jr_000_306B:
     add  $21                                      ; $3075: $C6 $21
     ld   l, a                                     ; $3077: $6F
     ld   e, a                                     ; $3078: $5F
-    jr   jr_000_3062                              ; $3079: $18 $E7
+    jr   .jr_000_3062                              ; $3079: $18 $E7
 
-jr_000_307B:
+.jr_000_307B:
     ld   a, $00                                   ; $307B: $3E $00
     ldh  [$FF9C], a                               ; $307D: $E0 $9C
     ld   hl, $9861                                ; $307F: $21 $61 $98
     ld   de, $C861                                ; $3082: $11 $61 $C8
     ld   c, $05                                   ; $3085: $0E $05
 
-jr_000_3087:
+.jr_000_3087:
     ld   b, $06                                   ; $3087: $06 $06
 
-jr_000_3089:
+.jr_000_3089:
     ld   a, [de]                                  ; $3089: $1A
     cp   $00                                      ; $308A: $FE $00
-    jr   nz, jr_000_3090                          ; $308C: $20 $02
+    jr   nz, .jr_000_3090                          ; $308C: $20 $02
 
     ld   a, $24                                   ; $308E: $3E $24
 
-jr_000_3090:
+.jr_000_3090:
     ld   [hl+], a                                 ; $3090: $22
     inc  de                                       ; $3091: $13
     dec  b                                        ; $3092: $05
-    jr   nz, jr_000_3089                          ; $3093: $20 $F4
+    jr   nz, .jr_000_3089                          ; $3093: $20 $F4
 
     dec  c                                        ; $3095: $0D
     jr   z, :+                                    ; $3096: $28 $09
@@ -8708,7 +8713,7 @@ jr_000_3090:
     add  $21                                      ; $309B: $C6 $21
     ld   l, a                                     ; $309D: $6F
     ld   e, a                                     ; $309E: $5F
-    jr   jr_000_3087                              ; $309F: $18 $E6
+    jr   .jr_000_3087                              ; $309F: $18 $E6
 
 :   ld   hl, $9901                                ; $30A1: $21 $01 $99
     ld   de, $C901                                ; $30A4: $11 $01 $C9

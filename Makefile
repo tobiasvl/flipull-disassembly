@@ -19,7 +19,7 @@ flipull_jp.gb: flipull_jp.o
 
 	@if which md5sum &>/dev/null; then md5sum $@; else md5 $@; fi
 
-# The Japanese version is padded with 0x00
+# The English version is padded with 0x00
 flipull_us.o: main.asm $(IMAGE_DEPS)
 	rgbasm -h -L -o flipull_us.o -p 0x00 -DREGION=US main.asm
 

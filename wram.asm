@@ -38,6 +38,14 @@ SECTION "Block RNG counter", WRAM0[$CA30]
 wBlockRNGCounter::
     ds 1
 
+SECTION "DX", WRAM0[$CCFE]
+rCurrentVBK::
+    ds 1
+
+SECTION "DX 2", WRAM0[$CCFF]
+rCurrentSVBK::
+    ds 1
+
 SECTION "Stack", WRAM0[$CFFF]
 ; CFFF
 wStack::

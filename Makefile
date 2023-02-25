@@ -1,4 +1,4 @@
-IMAGE_DEPS = gfx/Tiles.2bpp
+IMAGE_DEPS = gfx/TilesDX.2bpp gfx/Tiles.2bpp
 #MD5 := $(shell if which md5sum &>/dev/null; then md5sum; else md5; fi)
 
 all: flipull_us.gb flipull_jp.gb

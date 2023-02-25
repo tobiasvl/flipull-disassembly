@@ -1,3 +1,13 @@
+SECTION "OAM", WRAM0[$C000]
+wBlob::
+    ds 4
+
+wCurrentBlock::
+    ds 4
+
+wArrow::
+    ds 4
+
 SECTION "Score", WRAM0[$C120]
 ; C120
 wScore::

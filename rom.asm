@@ -1,7 +1,24 @@
 SECTION "RST 00 Vector", ROM0[$0000]
 RST_00::
-    jp   JumpTable                                ; $0000: $C3 $9E $2C
+    jp LCDOff
 
+SECTION "RST 08 Vector", ROM0[$0008]
+RST_08::
+    ld a, 2
+    ld [rROMB0], a
+    ld   hl, TilesDX                                ; $0159: $21 $CE $3A
+    ld   de, _VRAM                                ; $015C: $11 $00 $80
+    ld   bc, _SCRN0 - _VRAM                       ; $015F: $01 $00 $18
+    call MemCpyHLtoDE                             ; $0162: $CD $D9 $2C
+    inc a ; ld a, 1
+    ld [rROMB0], a
+    ret
+
+; Free real estate:
+SECTION "RST 20 Vector", ROM0[$0020]
+SECTION "RST 28 Vector", ROM0[$0028]
+SECTION "RST 30 Vector", ROM0[$0030]
+SECTION "RST 38 Vector", ROM0[$0038]
 
 SECTION "VBlank Interrupt Vector", ROM0[$0040]
 VBlankInterrupt::
@@ -40,15 +57,15 @@ SECTION "Header", ROM0[$0104]
 HeaderTitle::
     DB   "FLIPULL", $00, $00, $00, $00, $00, $00, $00, $00
 
-    DB   CART_COMPATIBLE_DMG
+    DB   CART_COMPATIBLE_DMG_GBC
 
     ; 0144: New licensee code
     DB   $00, $00
 
     DB   CART_INDICATOR_GB       
-    DB   CART_ROM
-    DB   CART_ROM_32KB
-    DB   CART_SRAM_NONE
+    DB   CART_ROM_MBC5_RAM_BAT
+    DB   CART_ROM_64KB
+    DB   CART_SRAM_8KB
 
 IF "{REGION}" == "JP"
     DB   CART_DEST_JAPANESE 
@@ -62,19 +79,21 @@ ENDC
     DB   $00
 
     ; 014D: Checksums, these will be set by RGBFIX
-    DB   $0E
-    DB   $8A, $B0
+SECTION "Checksums", ROM0[$014D]
+    DS   3, 0
 
 SETCHARMAP Text
 
+SECTION "Code", ROM0[$0150]
 Init::
-    call LCDOff                                   ; $0150: $CD $AA $2C
+    ldh [hIE2], a
+    rst  $00
     ld   sp, wStack                               ; $0153: $31 $FF $CF
     call SetUpDMA                                 ; $0156: $CD $33 $2C
-    ld   hl, Tiles                                ; $0159: $21 $CE $3A
-    ld   de, _VRAM                                ; $015C: $11 $00 $80
-    ld   bc, _SCRN0 - _VRAM                       ; $015F: $01 $00 $18
-    call MemCpyHLtoDE                             ; $0162: $CD $D9 $2C
+    call InitTiles
+REPT 9
+    nop
+ENDR
     call ClearScreen                              ; $0165: $CD $CA $2C
     ld   de, TitleScreenDrawCommands              ; $0168: $11 $3D $33
     call ExecuteDrawCommands.getNextDrawCommand   ; $016B: $CD $EC $2C
@@ -107,10 +126,10 @@ Init::
     ld   de, wBlockRNG                            ; $01A0: $11 $00 $CA
     ld   bc, $0024                                ; $01A3: $01 $24 $00
     call MemCpyHLtoDE                             ; $01A6: $CD $D9 $2C
-    ld   hl, vTitleScreenHiScore                  ; $01A9: $21 $49 $99
-    ld   de, wHiScore+6                           ; $01AC: $11 $36 $C1
-    ld   b, $07                                   ; $01AF: $06 $07
-    call MemCpyDEtoHLReverse                      ; $01B1: $CD $AC $2D
+    call InitAndDrawHiScore
+REPT 8
+    nop
+ENDR
     ld   b, $04                                   ; $01B4: $06 $04
     ld   de, ArrowLeftSelectionOAM                ; $01B6: $11 $CE $52
     call MemCpyDEtoWRAM                           ; $01B9: $CD $B3 $2D
@@ -134,17 +153,29 @@ Init::
     ldh  [$FFB5], a                               ; $01DE: $E0 $B5
     ldh  [$FFB7], a                               ; $01E0: $E0 $B7
     call SerialTransferHandler                    ; $01E2: $CD $25 $31
-    ld   a, $01                                   ; $01E5: $3E $01
-    ldh  [rTAC], a                                ; $01E7: $E0 $07
+REPT 4
+    nop
+ENDR
     ld   a, $05                                   ; $01E9: $3E $05
     ldh  [rTAC], a                                ; $01EB: $E0 $07
+;
+;    ldh a, [hIE2]
+;    cp $11
+;    jr nz, .done
+;
+;    ld a, $6
+;    ldh [rTAC], a
+;    ld a, 60
+;    ldh [rTMA], a
+;
+;.done
     ei                                            ; $01ED: $FB
 
 :   call ReadJoypad                               ; $01EE: $CD $FC $2B
     call ShuffleBlockRNG                          ; $01F1: $CD $8E $07
-    halt                                          ; $01F4: $76
 
-:   ldh  a, [hVBlankDone]                         ; $01F5: $F0 $91
+:   halt
+    ldh  a, [hVBlankDone]                         ; $01F5: $F0 $91
     and  a                                        ; $01F7: $A7
     jr   z, :-                                    ; $01F8: $28 $FB
 
@@ -257,26 +288,30 @@ VBlankInterruptHandler::
 .jr_000_02A9:
     ld   hl, $98A1                                ; $02A9: $21 $A1 $98
     ld   de, SorryText                            ; $02AC: $11 $C6 $39
-    ld   b, $0C                                   ; $02AF: $06 $0C
+    ld   b, $0B                                   ; $02AF: $06 $0C
     call MemCpyDEtoHLShort                        ; $02B1: $CD $B6 $2D
     ld   hl, $98C1                                ; $02B4: $21 $C1 $98
     ld   de, YouHaveText                          ; $02B7: $11 $D2 $39
-    ld   b, $0C                                   ; $02BA: $06 $0C
+    ld   b, $0B                                   ; $02BA: $06 $0C
     call MemCpyDEtoHLShort                        ; $02BC: $CD $B6 $2D
     ld   hl, $98E1                                ; $02BF: $21 $E1 $98
     ld   de, NoNextMoveText                       ; $02C2: $11 $DE $39
     ld   b, $0C                                   ; $02C5: $06 $0C
     call MemCpyDEtoHLShort                        ; $02C7: $CD $B6 $2D
-    ld   hl, $99CB                                ; $02CA: $21 $CB $99
-    ld   a, [$C00A]                               ; $02CD: $FA $0A $C0
-    ld   [hl], a                                  ; $02D0: $77
+    call DrawBlockNextToBlob
+REPT 4
+    nop
+ENDR
+;    ld   hl, $99CB                                ; $02CA: $21 $CB $99
+;    ld   a, [$C00A]                               ; $02CD: $FA $0A $C0
+;    ld   [hl], a                                  ; $02D0: $77
     jp   .vBlankDone                              ; $02D1: $C3 $C3 $03
 
 
 .jr_000_02D4:
     ld   hl, $9961                                ; $02D4: $21 $61 $99
     ld   de, ClearBonusText                       ; $02D7: $11 $AE $39
-    ld   b, $0C                                   ; $02DA: $06 $0C
+    ld   b, $0B                                   ; $02DA: $06 $0C
     call MemCpyDEtoHLShort                        ; $02DC: $CD $B6 $2D
     ld   hl, $9988                                ; $02DF: $21 $88 $99
     ld   de, $C113                                ; $02E2: $11 $13 $C1
@@ -289,7 +324,7 @@ VBlankInterruptHandler::
     ld   hl, vSBlockCount                         ; $02F5: $21 $D1 $99
     ldh  a, [hSBlocksRemaining]                   ; $02F8: $F0 $C5
     ld   [hl], a                                  ; $02FA: $77
-    jp   .vBlankDone                              ; $02FB: $C3 $C3 $03
+    jp   BlankPalettesInPlayArea;.vBlankDone                              ; $02FB: $C3 $C3 $03
 
 
 .jr_000_02FE:
@@ -299,11 +334,11 @@ VBlankInterruptHandler::
 
     ld   hl, $9921                                ; $0305: $21 $21 $99
     ld   de, TimeBonusText                        ; $0308: $11 $96 $39
-    ld   b, $0C                                   ; $030B: $06 $0C
+    ld   b, $0B                                   ; $030B: $06 $0C
     call MemCpyDEtoHLShort                        ; $030D: $CD $B6 $2D
     ld   hl, $9941                                ; $0310: $21 $41 $99
     ld   de, X10Text                              ; $0313: $11 $A2 $39
-    ld   b, $0C                                   ; $0316: $06 $0C
+    ld   b, $0B                                   ; $0316: $06 $0C
     call MemCpyDEtoHLShort                        ; $0318: $CD $B6 $2D
     ld   hl, $9827                                ; $031B: $21 $27 $98
     ld   de, wScore+6                             ; $031E: $11 $26 $C1
@@ -316,7 +351,7 @@ VBlankInterruptHandler::
     ld   hl, vSBlockCount                         ; $0331: $21 $D1 $99
     ldh  a, [hSBlocksRemaining]                   ; $0334: $F0 $C5
     ld   [hl], a                                  ; $0336: $77
-    jp   .vBlankDone                              ; $0337: $C3 $C3 $03
+    jp   BlankPalettesInPlayArea;.vBlankDone                              ; $0337: $C3 $C3 $03
 
 
 .Jump_000_033A:
@@ -326,7 +361,7 @@ VBlankInterruptHandler::
 
     ld   hl, $98E1                                ; $0340: $21 $E1 $98
     ld   de, PerfectText                          ; $0343: $11 $8A $39
-    ld   b, $0C                                   ; $0346: $06 $0C
+    ld   b, $0B                                   ; $0346: $06 $0C
     call MemCpyDEtoHLShort                        ; $0348: $CD $B6 $2D
     ld   hl, vSBlockCount                         ; $034B: $21 $D1 $99
     ldh  a, [hSBlocksRemaining]                   ; $034E: $F0 $C5
@@ -336,23 +371,31 @@ VBlankInterruptHandler::
 .jr_000_0353:
     ld   hl, $98E1                                ; $0353: $21 $E1 $98
     ld   de, ClearText                            ; $0356: $11 $7E $39
-    ld   b, $0C                                   ; $0359: $06 $0C
+    ld   b, $0B                                   ; $0359: $06 $0C
     call MemCpyDEtoHLShort                        ; $035B: $CD $B6 $2D
 
 .jr_000_035E:
-    ld   hl, $99CB                                ; $035E: $21 $CB $99
-    ld   a, [$C00A]                               ; $0361: $FA $0A $C0
-    ld   [hl], a                                  ; $0364: $77
+    call DrawBlockNextToBlob
+REPT 4
+    nop
+ENDR
+    ;ld   hl, $99CB                                ; $035E: $21 $CB $99
+    ;ld   a, [$C00A]                               ; $0361: $FA $0A $C0
+    ;ld   [hl], a                                  ; $0364: $77
     jr   .vBlankDone                              ; $0365: $18 $5C
 
 .Jump_000_0367:
     ld   hl, $98E1                                ; $0367: $21 $E1 $98
     ld   de, TimeUpText                           ; $036A: $11 $BA $39
-    ld   b, $0C                                   ; $036D: $06 $0C
+    ld   b, $0B                                   ; $036D: $06 $0C
     call MemCpyDEtoHLShort                        ; $036F: $CD $B6 $2D
-    ld   hl, $99CB                                ; $0372: $21 $CB $99
-    ld   a, [$C00A]                               ; $0375: $FA $0A $C0
-    ld   [hl], a                                  ; $0378: $77
+    call DrawBlockNextToBlob
+REPT 4
+    nop
+ENDR
+    ;ld   hl, $99CB                                ; $0372: $21 $CB $99
+    ;ld   a, [$C00A]                               ; $0375: $FA $0A $C0
+    ;ld   [hl], a                                  ; $0378: $77
     jr   .vBlankDone                              ; $0379: $18 $48
 
 .Jump_000_037B:
@@ -398,9 +441,13 @@ VBlankInterruptHandler::
     ld   hl, vSBlockCount                         ; $03B6: $21 $D1 $99
     ldh  a, [hSBlocksRemaining]                   ; $03B9: $F0 $C5
     ld   [hl], a                                  ; $03BB: $77
-    ld   hl, $99CB                                ; $03BC: $21 $CB $99
-    ld   a, [$C00A]                               ; $03BF: $FA $0A $C0
-    ld   [hl], a                                  ; $03C2: $77
+    call DrawBlockNextToBlob
+REPT 4
+    nop
+ENDR
+    ;ld   hl, $99CB                                ; $03BC: $21 $CB $99
+    ;ld   a, [$C00A]                               ; $03BF: $FA $0A $C0
+    ;ld   [hl], a                                  ; $03C2: $77
 
 .vBlankDone:
     ld   a, $01                                   ; $03C3: $3E $01
@@ -449,7 +496,7 @@ VBlankInterruptHandler::
     call MemCpyDEtoHLShort                        ; $041A: $CD $B6 $2D
     ld   a, $08                                   ; $041D: $3E $08
     ldh  [$FF9D], a                               ; $041F: $E0 $9D
-    jr   .vBlankDone                              ; $0421: $18 $A0
+    jp   BlankPalettesInPlayArea;.vBlankDone                              ; $0421: $18 $A0
 
 :   ld   hl, $9861                                ; $0423: $21 $61 $98
     ld   de, BlankText                            ; $0426: $11 $66 $39
@@ -477,7 +524,7 @@ VBlankInterruptHandler::
     call MemCpyDEtoHLShort                        ; $0462: $CD $B6 $2D
     ld   a, $08                                   ; $0465: $3E $08
     ldh  [$FF9D], a                               ; $0467: $E0 $9D
-    jp   .vBlankDone                              ; $0469: $C3 $C3 $03
+    jp   BlankPalettesInPlayArea;p   .vBlankDone                              ; $0469: $C3 $C3 $03
 
 
 .Jump_000_046C:
@@ -519,7 +566,7 @@ VBlankInterruptHandler::
     call MemCpyDEtoHLShort                        ; $04BC: $CD $B6 $2D
     ld   a, $07                                   ; $04BF: $3E $07
     ldh  [$FF9D], a                               ; $04C1: $E0 $9D
-    jp   .vBlankDone                              ; $04C3: $C3 $C3 $03
+    jp   BlankPalettesInPlayArea; p   .vBlankDone                              ; $04C3: $C3 $C3 $03
 
 
 .jr_000_04C6:
@@ -549,7 +596,8 @@ VBlankInterruptHandler::
     call MemCpyDEtoHLShort                        ; $0505: $CD $B6 $2D
     ld   a, $07                                   ; $0508: $3E $07
     ldh  [$FF9D], a                               ; $050A: $E0 $9D
-    jp   .vBlankDone                              ; $050C: $C3 $C3 $03
+    ;jp   .vBlankDone                  
+    jp   BlankPalettesInPlayArea
 
 
 .Jump_000_050F:
@@ -582,8 +630,7 @@ VBlankInterruptHandler::
     call DrawFromWRAM                             ; $0550: $CD $C2 $30
     ld   a, $0A                                   ; $0553: $3E $0A
     ldh  [$FF9D], a                               ; $0555: $E0 $9D
-    jp   .vBlankDone                              ; $0557: $C3 $C3 $03
-
+    jp UnpausePal1
 
 .jr_000_055A:
     ; Redraw lower play area after pause
@@ -613,15 +660,15 @@ VBlankInterruptHandler::
     call DrawFromWRAM                             ; $0599: $CD $C2 $30
     ld   a, $09                                   ; $059C: $3E $09
     ldh  [$FF9D], a                               ; $059E: $E0 $9D
-    jp   .vBlankDone                              ; $05A0: $C3 $C3 $03
+    jp UnpausePal2
 ; End of VBlankInterruptHandler
 
 
 TimerInterruptHandler::
-    push af                                       ; $05A3: $F5
-    push bc                                       ; $05A4: $C5
-    push de                                       ; $05A5: $D5
-    push hl                                       ; $05A6: $E5
+    jp CheckTimerInterruptFrame
+    nop
+
+.run:
     ldh  a, [$FFE2]                               ; $05A7: $F0 $E2
     ld   h, a                                     ; $05A9: $67
     cp   $00                                      ; $05AA: $FE $00
@@ -1173,6 +1220,46 @@ Jump_000_0852:
 :   call MemCpyDEtoHLReverse                      ; $0879: $CD $AC $2D
 
 Jump_000_087C:
+;    ld   a, $83                                   ; $0886: $3E $83
+;    ldh  [rLCDC], a                               ; $0888: $E0 $40
+;    ldh  a, [hPressedButtonsMask]                 ; $0892: $F0 $8B
+;
+;    cp PADF_UP
+;    jr nz, .next
+;
+;    ld   hl, hStage                               ; $1673: $21 $C6 $FF
+;
+;.incrementStageNumber:
+;    inc  [hl]                                     ; $1676: $34
+;    ld   a, [hl]                                  ; $1677: $7E
+;    cp   $0A                                      ; $1678: $FE $0A
+;    jr   nz, .noCarry                             ; $167A: $20 $05
+;
+;    ld   a, $00                                   ; $167C: $3E $00
+;    ld   [hl+], a                                 ; $167E: $22
+;    jr   .incrementStageNumber                    ; $167F: $18 $F5
+;
+;.noCarry
+;    ldh  a, [hPressedButtonsMask]                 ; $0892: $F0 $8B
+;.next
+;    cp PADF_UP
+;    jr nz, .done
+;
+;    ld   hl, hStage                               ; $1673: $21 $C6 $FF
+;
+;.decrementStageNumber:
+;    dec  [hl]                                     ; $1676: $34
+;    ld   a, [hl]                                  ; $1677: $7E
+;    cp   $FF                                      ; $1678: $FE $0A
+;    jr   nz, .done                             ; $167A: $20 $05
+;
+;    ld   a, $09                                   ; $167C: $3E $00
+;    ld [hl], a
+;    inc hl
+;    dec [hl]
+;    jr   .decrementStageNumber                    ; $167F: $18 $F5
+;
+;.done
     ld   a, $02                                   ; $087C: $3E $02
     ldh  [$FF9D], a                               ; $087E: $E0 $9D
     ld   a, $00                                   ; $0880: $3E $00
@@ -1540,7 +1627,7 @@ StartGame::
     ld   [hl+], a                                 ; $0ACE: $22
     ld   a, $89                                   ; $0ACF: $3E $89
     ld   [hl+], a                                 ; $0AD1: $22
-    ld   a, $00                                   ; $0AD2: $3E $00
+    ld   a, PALETTE_BLOB                                   ; $0AD2: $3E $00
     ld   [hl+], a                                 ; $0AD4: $22
     ld   a, $80                                   ; $0AD5: $3E $80
     ld   [hl+], a                                 ; $0AD7: $22
@@ -1548,7 +1635,7 @@ StartGame::
     ld   [hl+], a                                 ; $0ADA: $22
     ld   a, $82                                   ; $0ADB: $3E $82
     ld   [hl+], a                                 ; $0ADD: $22
-    ld   a, $00                                   ; $0ADE: $3E $00
+    ld   a, $02                                   ; $0ADE: $3E $00
     ld   [hl+], a                                 ; $0AE0: $22
     ld   [hl], a                                  ; $0AE1: $77
     ld   hl, $FFA6                                ; $0AE2: $21 $A6 $FF
@@ -1700,7 +1787,7 @@ jr_000_0B49:
     ld   [hl+], a                                 ; $0BDD: $22
     ld   a, $89                                   ; $0BDE: $3E $89
     ld   [hl+], a                                 ; $0BE0: $22
-    ld   a, $00                                   ; $0BE1: $3E $00
+    ld   a, PALETTE_BLOB                                   ; $0BE1: $3E $00
     ld   [hl+], a                                 ; $0BE3: $22
     ld   a, $80                                   ; $0BE4: $3E $80
     ld   [hl+], a                                 ; $0BE6: $22
@@ -1947,6 +2034,8 @@ jr_000_0D3E:
     dec  [hl]                                     ; $0D56: $35
     ld   a, $82                                   ; $0D57: $3E $82
     ld   [$C006], a                               ; $0D59: $EA $06 $C0
+    and  a, 7
+    ld   [$C007], a
     ld   hl, UnknownMusic4                        ; $0D5C: $21 $4A $68
     call Call_000_332E                            ; $0D5F: $CD $2E $33
     ld   hl, $FFA6                                ; $0D62: $21 $A6 $FF
@@ -2421,6 +2510,8 @@ jr_000_0FFF:
     call Call_000_324E                            ; $1002: $CD $4E $32
     ld   a, $82                                   ; $1005: $3E $82
     ld   [$C006], a                               ; $1007: $EA $06 $C0
+    and  a, 7
+    ld   [$C007], a
     ld   hl, $FFA6                                ; $100A: $21 $A6 $FF
     set  0, [hl]                                  ; $100D: $CB $C6
     ld   hl, UnknownMusic4                        ; $100F: $21 $4A $68
@@ -2666,6 +2757,8 @@ jr_000_1163:
     ldh  [$FFA0], a                               ; $1168: $E0 $A0
     ld   a, [$C006]                               ; $116A: $FA $06 $C0
     ld   [$C00A], a                               ; $116D: $EA $0A $C0
+    ld   a, [$C007]                               ; $116A: $FA $06 $C0
+    ld   [$C00B], a                               ; $116D: $EA $0A $C0
     ld   hl, _RAM                                 ; $1170: $21 $00 $C0
     ld   a, $80                                   ; $1173: $3E $80
     ld   [hl+], a                                 ; $1175: $22
@@ -2705,6 +2798,8 @@ jr_000_11A3:
 Jump_000_11AD:
     ld   a, [$C006]                               ; $11AD: $FA $06 $C0
     ld   [$C00A], a                               ; $11B0: $EA $0A $C0
+    ld   a, [$C007]                               ; $116A: $FA $06 $C0
+    ld   [$C00B], a                               ; $116D: $EA $0A $C0
     ld   hl, _RAM                                 ; $11B3: $21 $00 $C0
     ld   a, $80                                   ; $11B6: $3E $80
     ld   [hl+], a                                 ; $11B8: $22
@@ -3141,10 +3236,10 @@ jr_000_1419:
     jr   .compareHiScoreDigit                     ; $142F: $18 $F3
 
 .newHiScore:
-    ld   hl, wScore                               ; $1431: $21 $20 $C1
-    ld   de, wHiScore                             ; $1434: $11 $30 $C1
-    ld   bc, $0007                                ; $1437: $01 $07 $00
-    call MemCpyHLtoDE                             ; $143A: $CD $D9 $2C
+    call NewHiScore
+REPT 9
+    nop
+ENDR
 
 jr_000_143D:
     ld   a, $05                                   ; $143D: $3E $05
@@ -3563,7 +3658,10 @@ jr_000_1673:
 
 jr_000_168D:
     call LoadStage                                ; $168D: $CD $55 $2D
-    jp   Jump_000_0852                            ; $1690: $C3 $52 $08
+;    jp   Jump_000_0852                            ; $1690: $C3 $52 $08
+REPT 3
+    nop
+ENDR
 
 
 UnusedTransitionAnimations::
@@ -5563,7 +5661,7 @@ jr_000_2114:
     ld   a, b                                     ; $2122: $78
     dec  a                                        ; $2123: $3D
     ld   [hl+], a                                 ; $2124: $22
-    ld   a, $00                                   ; $2125: $3E $00
+    ld   a, PALETTE_BLOB                                   ; $2125: $3E $00
     ld   [hl], a                                  ; $2127: $77
     jp   Jump_000_2292                            ; $2128: $C3 $92 $22
 
@@ -5618,6 +5716,8 @@ jr_000_2148:
 
     ld   a, [hl]                                  ; $2179: $7E
     ld   [$C006], a                               ; $217A: $EA $06 $C0
+    and a, 7
+    ld   [$C007], a                               ; $217A: $EA $06 $C0
 
 .blockMatch:
     call Call_000_30CF                            ; $217D: $CD $CF $30
@@ -5641,6 +5741,8 @@ jr_000_218C:
     ld   b, a                                     ; $2195: $47
     ld   a, [hl]                                  ; $2196: $7E
     ld   [$C006], a                               ; $2197: $EA $06 $C0
+    and  a, 7
+    ld   [$C007], a                               ; $2197: $EA $06 $C0
     ld   a, b                                     ; $219A: $78
     ld   [hl+], a                                 ; $219B: $22
 
@@ -5880,6 +5982,8 @@ jr_000_22AD:
 
     ld   a, [hl]                                  ; $22E1: $7E
     ld   [$C006], a                               ; $22E2: $EA $06 $C0
+    and  a, 7
+    ld   [$C007], a
 
 jr_000_22E5:
     call Call_000_30CF                            ; $22E5: $CD $CF $30
@@ -5894,6 +5998,8 @@ jr_000_22EA:
     ld   b, a                                     ; $22F4: $47
     ld   a, [hl]                                  ; $22F5: $7E
     ld   [$C006], a                               ; $22F6: $EA $06 $C0
+    and  a, 7
+    ld   [$C007], a
     ld   a, b                                     ; $22F9: $78
     ld   [hl], a                                  ; $22FA: $77
     ld   bc, hMusicSpeed                          ; $22FB: $01 $E0 $FF
@@ -7723,6 +7829,25 @@ DMARoutine::
 ENDL
 
 
+; TODO This saves 5 HRAM bytes
+;RunDMA:          ; This part is in ROM
+;    ld a, HIGH(start address)
+;    ld bc, $2846  ; B: wait time; C: LOW($FF46)
+;    jp run_dma_hrampart
+;
+;DMARoutineCode::
+;LOAD "DMA routine", HRAM[_HRAM]
+;DMARoutine:
+;    ldh [c], a
+;
+;:   dec b
+;    jr nz, :-
+;
+;    ret
+;.end
+;ENDL
+
+
 Call_000_2C4B:
     ldh  a, [$FF8D]                               ; $2C4B: $F0 $8D
     sub  $10                                      ; $2C4D: $D6 $10
@@ -7784,28 +7909,16 @@ jr_000_2C80:
     ret                                           ; $2C9D: $C9
 
 
-; Generic routine for dispatching to a jump table.
-; Not used in this game.
-JumpTable::
-    add  a                                        ; $2C9E: $87
-    pop  hl                                       ; $2C9F: $E1
-    ld   e, a                                     ; $2CA0: $5F
-    ld   d, $00                                   ; $2CA1: $16 $00
-    add  hl, de                                   ; $2CA3: $19
-    ld   e, [hl]                                  ; $2CA4: $5E
-    inc  hl                                       ; $2CA5: $23
-    ld   d, [hl]                                  ; $2CA6: $56
-    push de                                       ; $2CA7: $D5
-    pop  hl                                       ; $2CA8: $E1
-    jp   hl                                       ; $2CA9: $E9
+REPT 12
+    DB   $00
+ENDR
 
 
 LCDOff::
     ldh  a, [rIE]                                 ; $2CAA: $F0 $FF
     ldh  [hIE], a                                 ; $2CAC: $E0 $92
     res  0, a                                     ; $2CAE: $CB $87
-    ; Possible bug: Doesn't load A back into rIE, so
-    ; interrupts aren't actually disabled here!
+    ldh  [rIE], a
 
 ; Wait for VBlank
 :   ldh  a, [rLY]                                 ; $2CB0: $F0 $44
@@ -7842,7 +7955,14 @@ ClearScreen::
     or   c                                        ; $2CD5: $B1
     jr   nz, :-                                   ; $2CD6: $20 $F8
 
-    ret                                           ; $2CD8: $C9
+REPT 14
+    nop
+ENDR
+
+    ldh  a, [hIE2]
+    cp   $11
+    ret  nz
+    jp   ClearPalettes
 
 
 MemCpyHLtoDE::
@@ -7870,9 +7990,29 @@ ExecuteDrawCommands::
 ExecuteDrawCommands.getNextDrawCommand::
     ld   a, [de]                                  ; $2CEC: $1A
     cp   $00                                      ; $2CED: $FE $00
-    jr   nz, ExecuteDrawCommands                  ; $2CEF: $20 $F1
+    jr  z, .done
+    ;jr   nz, ExecuteDrawCommands                  ; $2CEF: $20 $F1
 
-    ret                                           ; $2CF1: $C9
+    cp   $FF
+    jr   nz, ExecuteDrawCommands
+    ldh  a, [hIE2]
+    cp   $11
+    jr   nz, .done
+    ;ret                                         ; $2CF1: $C9
+
+    inc de
+
+    ld a, 1
+    ld [rVBK], a
+    ld [wCurrentVBK], a
+    ld a, [de]
+    jr ExecuteDrawCommands
+
+.done:
+    xor a
+    ld [rVBK], a
+    ld [wCurrentVBK], a
+    ret
 
 
 ExecuteDrawCommand::
@@ -7957,9 +8097,39 @@ ExecuteDrawCommandsToWRAM::
 ExecuteDrawCommandsToWRAM.getNextDrawCommand::
     ld   a, [de]                                  ; $2D3B: $1A
     cp   $00                                      ; $2D3C: $FE $00
-    jr   nz, ExecuteDrawCommandsToWRAM            ; $2D3E: $20 $ED
+    jr  z, .done
+    ;jr   nz, ExecuteDrawCommands                  ; $2CEF: $20 $F1
 
-    ret                                           ; $2D40: $C9
+    cp   $FF
+    jr   nz, ExecuteDrawCommandsToWRAM
+    ldh  a, [hIE2]
+    cp   $11
+    jr   nz, .done
+    ;ret                                         ; $2CF1: $C9
+
+    inc de
+    ld a, [de]
+    inc de
+    and  $0F                                      ; $2D2E: $E6 $0F
+    or   $D0                                      ; $2D30: $F6 $C0
+    ld   h, a                                     ; $2D32: $67
+    ld   a, [de]                                  ; $2D33: $1A
+    ld   l, a                                     ; $2D34: $6F
+    inc  de                                       ; $2D35: $13
+    ld   a, [de]                                  ; $2D36: $1A
+    inc  de                                       ; $2D37: $13
+;    ld a, 3
+;    ld [rSVBK], a
+;    ld [rCurrentSVBK], a
+    call ExecuteDrawCommand                       ; $2D38: $CD $F2 $2C
+
+    ;jr ExecuteDrawCommandsToWRAM
+
+.done:
+;    xor a
+;    ld [rSVBK], a
+;    ld [rCurrentSVBK], a
+    ret
 
 
 InitNewGame::
@@ -8611,6 +8781,10 @@ jr_000_301D:
     jr   jr_000_301D                              ; $3027: $18 $F4
 
 Call_000_3029:
+    ld a, [hIE2]
+    cp $11
+    call z, Call_000_3029_PAL
+
     ldh  a, [$FF97]                               ; $3029: $F0 $97
     cp   $00                                      ; $302B: $FE $00
     jr   nz, .jr_000_3050                          ; $302D: $20 $21
@@ -8748,6 +8922,20 @@ DrawFromWRAM:
     jr   nz, :+                                   ; $30C5: $20 $02
 
     ld   a, " "                                   ; $30C7: $3E $24
+
+:   ld   [hl+], a                                 ; $30C9: $22
+    inc  de                                       ; $30CA: $13
+    dec  b                                        ; $30CB: $05
+    jr   nz, :--                                  ; $30CC: $20 $F4
+
+    ret                                           ; $30CE: $C9
+
+DrawPalFromWRAM:
+:   ld   a, [de]                                  ; $30C2: $1A
+    cp   $00                                      ; $30C3: $FE $00
+    jr   z, :+                                   ; $30C5: $20 $02
+
+    and  a, 7
 
 :   ld   [hl+], a                                 ; $30C9: $22
     inc  de                                       ; $30CA: $13
@@ -9263,20 +9451,40 @@ TitleScreenDrawCommands::
     DB   $98, $20, $54, $80
 
     ; Logo
-    DB   $98, $40, $14, $80, $30, $31, $32, $33, $24, $24, $34, $24, $35, $36, $37, $38
-    DB   $39, $3A, $64, $24, $65, $24, $80
+    ;DB   $98, $40, $14, $80, $30, $31, $32, $33, $24, $24, $34, $24, $35, $36, $37, $38
+    ;DB   $39, $3A, $64, $24, $65, $24, $80
 
-    DB   $98, $60, $14, $80, $3B, $3C, $3D, $3E, $24, $24, $3F, $24, $40, $41, $42, $43
-    DB   $44, $3E, $24, $45, $66, $24, $80
+    ;DB   $98, $60, $14, $80, $3B, $3C, $3D, $3E, $24, $24, $3F, $24, $40, $41, $42, $43
+    ;DB   $44, $3E, $24, $24, $66, $24, $80
     
-    DB   $98, $80, $14, $80, $46, $47, $24, $48, $49, $24, $4A, $24, $4B, $4C, $4D, $4E
-    DB   $4F, $48, $49, $50, $51, $24, $80
+    ;DB   $98, $80, $14, $80, $46, $47, $24, $48, $49, $24, $4A, $24, $4B, $4C, $4D, $4E
+    ;DB   $4F, $48, $49, $45, $67, $24, $80
+    
+    ;DB   $98, $A0, $14, $80, $52, $53, $54, $55, $56, $57, $58, $59, $5A, $5B, $5C, $5D
+    ;DB   $5E, $5F, $60, $50, $51, $68, $80
+
+    ;DB   $98, $C0, $14, $80, $24, $24, $24, $24, $24, $24, $24, $24, $24, $24, $24, $24
+    ;DB   $24, $24, $24, $61, $62, $63, $80
+
+    DB   $98, $40, $14, $80, $30, $31, $32, $33, $24, $6A, $34, $35, $36, $37, $38
+    DB   $39, $3A, $64, $65, $66, $6F, $70, $80
+
+    DB   $98, $60, $14, $80, $3B, $3C, $3D, $3E, $24, $6B, $3F, $40, $41, $42, $43
+    DB   $44, $6C, $24, $67, $68, $71, $72, $80
+    
+    DB   $98, $80, $14, $80, $46, $47, $24, $48, $49, $69, $4A, $4B, $4C, $4D, $4E
+    DB   $4F, $6D, $49, $6E, $45, $24, $24, $80
     
     DB   $98, $A0, $14, $80, $52, $53, $54, $55, $56, $57, $58, $59, $5A, $5B, $5C, $5D
-    DB   $5E, $5F, $60, $61, $62, $63, $80
+    DB   $5E, $5F, $60, $50, $51, $73, $80
+
+    DB   $98, $C0, $14, $80, $24, $24, $24, $24, $24, $24, $24, $24, $24, $24, $24, $24
+    DB   $24, $24, $24, $61, $62, $74, $80
     
     ; Blocks under logo
-    DB   $98, $C0, $54, $80
+    ;DB   $98, $C0, $54, $80
+    ;DB   $98, $C0, $01, $80
+    ;DB   $98, $D3, $01, $80
     
     DB   $98, $E0, $54, $80
     
@@ -9297,6 +9505,15 @@ ELIF "{REGION}" == "US"
     DB   $9A, $20, $14, "LICENSED BY NINTENDO"
 ENDC
 
+    DB   $FF
+    DB   $98, $41, $52, $01
+    DB   $98, $61, $52, $01
+    DB   $98, $81, $52, $01
+    DB   $98, $A0, $14, $00, $03, $03, $05, $05, $05, $05, $05, $05, $02, $02, $02, $02
+    DB   $02, $02, $02, $00, $00, $00, $00
+    DB   $98, $B0, $41, $01
+    DB   $98, $D0, $43, $01
+
     ; Command terminator
     DB   $00
 
@@ -9315,6 +9532,8 @@ PlayAreaDrawCommand::
     DB   $98, $6D, $CC, $80
     
     DB   $98, $73, $CC, $80
+
+    DB   $98, $6C, $CC, $CA
 
     DB   $98, $6E, $05, "CLEAR"
     
@@ -9337,6 +9556,10 @@ PlayAreaDrawCommand::
     DB   $9A, $00, $54, $80
     
     DB   $9A, $20, $54, $80
+
+    DB   $FF
+
+    DB   $99, $CF, $01, $02
     
     ; Command terminator
     DB   $00
@@ -9644,28 +9867,28 @@ PauseText::
     DB   "   PAUSE    "
 
 ClearText::
-    DB   "   CLEAR!   "
+    DB   "   CLEAR!  "
 
 PerfectText::
-    DB   " PERFECT!!  "
+    DB   "  PERFECT!!"
 
 TimeBonusText::
-    DB   " TIME BONUS "
+    DB   " TIME BONUS"
 
 X10Text::
-    DB   "      X  10 "
+    DB   "      X  10"
 
 ClearBonusText::
-    DB   " CLEAR BONUS"
+    DB   "CLEAR BONUS"
 
 TimeUpText::
-    DB   "  TIME UP!  "
+    DB   "  TIME UP! "
 
 SorryText::
-    DB   "   SORRY    "
+    DB   "   SORRY   "
 
 YouHaveText::
-    DB   "  YOU HAVE  "
+    DB   "  YOU HAVE "
 
 NoNextMoveText::
     DB   "NO NEXT MOVE"
@@ -9800,7 +10023,10 @@ Stage32Data:
     DB   $06, $05, $02
 
 Tiles::
-    INCBIN "gfx/Tiles.2bpp"
+    INCBIN "gfx/Tiles.2bpp",0,1118
+
+SECTION "Data", ROMX, BANK[1]
+    INCBIN "gfx/Tiles.2bpp",1118,5026
 
 ;;;;;;;;
 ; OAM
@@ -9850,15 +10076,15 @@ ENDC
 
 TransitionStage10OAM::
     DB   $60, $78, $30, $00, $60, $80, $31, $00, $68, $78, $32, $00, $68, $80, $33, $00
-    DB   $60, $68, $38, $00, $60, $70, $39, $00, $68, $68, $3A, $00, $68, $70, $3B, $00
-    DB   $60, $28, $34, $00, $60, $30, $35, $00, $68, $28, $36, $00, $68, $30, $37, $00
+    DB   $60, $68, $38, $03, $60, $70, $39, $03, $68, $68, $3A, $03, $68, $70, $3B, $03
+    DB   $60, $28, $34, $06, $60, $30, $35, $06, $68, $28, $36, $06, $68, $30, $37, $06
 
 UnknownOAM5336::
     DB   $68, $28, $58, $00, $68, $30, $59, $00, $68, $38, $24, $00
 
 TransitionStage20OAM::
     DB   $60, $78, $30, $00, $60, $80, $31, $00, $68, $78, $32, $00, $68, $80, $33, $00
-    DB   $60, $68, $34, $00, $60, $70, $35, $00, $68, $68, $36, $00, $68, $70, $37, $00
+    DB   $60, $68, $34, $06, $60, $70, $35, $06, $68, $68, $36, $06, $68, $70, $37, $06
 
 TransitionStage30OAM::
     DB   $60, $54, $24, $00, $60, $5C, $24, $00, $60, $64, $30, $00, $60, $6C, $31, $00
@@ -9883,12 +10109,12 @@ Tilemap53B2::
     DB   $24, $24, $5F, $60, $24, $24, $61, $62
 
 BigSquareBlockOAM1::
-    DB   $35, $20, $38, $00, $35, $28, $39, $00, $3D, $20, $3A, $00, $3D, $28, $3B, $00
+    DB   $35, $20, $38, $03, $35, $28, $39, $03, $3D, $20, $3A, $03, $3D, $28, $3B, $03
 
 TransitionStage40OAM::
     DB   $60, $78, $30, $00, $60, $80, $31, $00, $68, $78, $32, $00, $68, $80, $33, $00
-    DB   $60, $68, $38, $00, $60, $70, $39, $00, $68, $68, $3A, $00, $68, $70, $3B, $00
-    DB   $60, $28, $40, $00, $60, $30, $41, $00, $68, $28, $42, $00, $68, $30, $43, $00
+    DB   $60, $68, $38, $03, $60, $70, $39, $03, $68, $68, $3A, $03, $68, $70, $3B, $03
+    DB   $60, $28, $40, $01, $60, $30, $41, $01, $68, $28, $42, $01, $68, $30, $43, $01
 
 BigBlobOAM1::
     DB   $60, $50, $30, $00, $60, $58, $31, $00, $68, $50, $32, $00, $68, $58, $33, $00
@@ -9904,10 +10130,10 @@ BigBlobWalkingLeftOAM1::
     DB   $68, $58, $52, $00, $68, $60, $53, $00
 
 BigFourBlocksOAM::
-    DB   $A0, $20, $34, $00, $A0, $28, $35, $00, $A8, $20, $36, $00, $A8, $28, $37, $00
-    DB   $F0, $38, $38, $00, $F0, $40, $39, $00, $F8, $38, $3A, $00, $F8, $40, $3B, $00
-    DB   $C8, $68, $38, $00, $C8, $70, $77, $00, $D0, $68, $78, $00, $D0, $70, $79, $00
-    DB   $B8, $80, $7A, $00, $B8, $88, $7B, $00, $C0, $80, $7C, $00, $C0, $88, $7D, $00
+    DB   $A0, $20, $34, $06, $A0, $28, $35, $06, $A8, $20, $36, $06, $A8, $28, $37, $06
+    DB   $F0, $38, $38, $03, $F0, $40, $39, $03, $F8, $38, $3A, $03, $F8, $40, $3B, $03
+    DB   $C8, $68, $38, $05, $C8, $70, $77, $05, $D0, $68, $78, $05, $D0, $70, $79, $05
+    DB   $B8, $80, $7A, $04, $B8, $88, $7B, $04, $C0, $80, $7C, $04, $C0, $88, $7D, $04
 
 BigBlobWalkingRightOAM::
     DB   $60, $48, $24, $00, $60, $50, $24, $00, $60, $58, $44, $00, $60, $60, $45, $00
@@ -10420,3 +10646,530 @@ UnknownMusic687C::
     DB   $FD, $6E, $F0, $10, $08, $11, $A6, $12, $F1, $13, $44, $14, $C7, $F0, $12, $F1
     DB   $13, $59, $14, $C7, $F0, $12, $F2, $13, $6B, $14, $C7, $F0, $F0, $10, $08, $11
     DB   $A6, $12, $08, $14, $80, $FF
+
+SECTION "DX", ROMX, BANK[1]
+;SECTION "DX", ROM0
+InitAndDrawHiScore:
+    call LoadSRAM
+    ld   hl, vTitleScreenHiScore                  ; $01A9: $21 $49 $99
+    ld   de, wHiScore+6                           ; $01AC: $11 $36 $C1
+    ld   b, $07                                   ; $01AF: $06 $07
+    jp   MemCpyDEtoHLReverse                        ; $01B1: $CD $AC $2D
+
+LoadSRAM:
+    ld a, CART_SRAM_ENABLE
+    ld [rRAMG], a
+
+    ld de, HeaderTitle
+    ld hl, _SRAM
+.verifyLoop
+    ld a, [de]
+    or a
+    jr z, .sramOk
+    cp [hl]
+    inc de
+    inc hl
+    jr z, .verifyLoop
+  
+    ld de, HeaderTitle
+    ld hl, _SRAM
+.copySigLoop
+    ld a, [de]
+    ld [hl+], a
+    inc de
+    or a
+    jr nz, .copySigLoop
+  
+.clearSramLoop
+    xor a
+    ld [hl+], a
+    ld a, h
+    cp HIGH(_RAM)
+    jr nz, .clearSramLoop 
+  
+.sramOk
+    ; The signature matched, or SRAM was cleared. Now copy from SRAM to work RAM
+    ld  hl, $A010  ; SRAM location after string
+    ld  de, wHiScore
+.copyHiScore
+    ld  c, 7
+.restorehiscoreloop
+    ld a, [hl+]
+    ld [de], a
+    inc de
+  
+    dec c
+    ;ld a, h
+    ;cp  $c0  ; Has the source address reached outside $b000-$bfff?
+    jr nz, .restorehiscoreloop
+
+    xor a
+    ld [rRAMG], a
+    ret
+
+NewHiScore:
+    ld   hl, wScore                               ; $1431: $21 $20 $C1
+    ld   de, wHiScore                             ; $1434: $11 $30 $C1
+    ld   bc, $0007                                ; $1437: $01 $07 $00
+    call MemCpyHLtoDE
+
+    ld a, CART_SRAM_ENABLE
+    ld [rRAMG], a
+
+    ld  hl, $C120  ; WRAM location, edit this
+    ld  de, $A010  ; SRAM location after string
+
+    jp LoadSRAM.copyHiScore
+
+InitTiles:
+    ldh a, [hIE2]
+    cp $11
+    jr nz, .DMGTiles
+    xor a
+    ldh [rIE], a
+    ldh [hPressedButtonsMask], a
+    ld a, $30
+    ldh [rP1], a
+    ld a, $01
+    ldh [$FF4D], a
+    stop
+    call InitPalettes
+    rst 8
+    ret
+.DMGTiles
+    ld   hl, Tiles                                ; $0159: $21 $CE $3A
+    ld   de, _VRAM                                ; $015C: $11 $00 $80
+    ld   bc, _SCRN0 - _VRAM                       ; $015F: $01 $00 $18
+    jp MemCpyHLtoDE                             ; $0162: $CD $D9 $2C
+
+;SECTION "Palettes", ROM0[$7000]
+InitPalettes:
+    ld bc, (64 << 8) | LOW(rBGPI)
+    ld a, BGPIF_AUTOINC
+    ldh [c], a
+    ld hl, Palettes
+    inc c
+
+:   ld a, [hl+]
+    ldh [c], a
+    dec b
+    jr nz, :-
+    
+    inc a ; ld a, OBPIF_AUTOINC ; TODO change this if 87 block color 3 changes
+    inc c
+    ldh [c], a
+    inc c
+    ld b, 64
+    ld hl, Palettes
+
+:   ld a, [hl+]
+    ldh [c], a
+    dec b
+    jr nz, :-
+
+    ret
+
+Palettes:
+.background:
+    ;   hvit     lys      mørk     svart
+    rgb #000000, #ffaa00, #773300, #ffffff ; Tekst, UI, blokk, osv (white on black)
+    rgb #000000, #666666, #999999, #ffffff ; Logo, rør
+    rgb #000000, #000066, #ffff00, #0000ff ; S-blokk (ledig farge 0)
+    rgb #000000, #333333, #00aa00, #ffffff ; Firkantblokk (ledig farge 0)
+    rgb #000000, #333333, #000000, #ffffff ; Kryssblokk (ledig farger 0, 2)
+    rgb #000000, #333333, #ff0000, #ffffff ; Sirkelblokk (ledig farge 0)
+    rgb #000000, #333333, #0000ff, #ffffff ; Taito-blokk (ledig farge 0)
+    rgb #000000, #ffaa00, #773300, #ffffff ; 87-blokk (ledig farge 3)
+
+;.sprites:
+;    rgb #ff00ff, #ffaa00, #773300, #ffffff ; Blob
+;    rgb #ff00ff, #666666, #999999, #ffffff ; Rør
+;    rgb #ff00ff, #0000ff, #ffff00, #000066 ; S-blokk
+;    rgb #ff00ff, #333333, #00aa00, #ffffff ; Firkantblokk
+;    rgb #ff00ff, #333333, #000000, #ffffff ; Kryssblokk (ledig farge 2)
+;    rgb #ff00ff, #333333, #ff0000, #ffffff ; Sirkelblokk
+;    rgb #ff00ff, #333333, #0000ff, #ffffff ; Taito-blokk
+;    rgb #ff00ff, #ffaa00, #773300, #ffffff ; ledig?
+
+DEF PALETTE_BLOB EQU 00
+
+
+
+Call_000_3029_PAL:
+    ld a, 1
+    ld [rVBK], a
+    ld [wCurrentVBK], a
+
+    ldh  a, [$FF97]                               ; $3029: $F0 $97
+    cp   $00                                      ; $302B: $FE $00
+    
+    jr   nz, .jr_000_3050                          ; $302D: $20 $21
+
+    ld   hl, $9921                                ; $302F: $21 $21 $99
+    ld   de, $C921                                ; $3032: $11 $21 $C9
+    ld   c, $06                                   ; $3035: $0E $06
+
+.nextRow:
+    ld   b, $06                                   ; $3037: $06 $06
+
+.rowLoop:
+    ld   a, [de]                                  ; $3039: $1A
+    and a, 7
+
+.nextBlock:
+    ld   [hl+], a                                 ; $3040: $22
+    inc  de                                       ; $3041: $13
+    dec  b                                        ; $3042: $05
+    jr   nz, .rowLoop                             ; $3043: $20 $F4
+
+    dec  c                                        ; $3045: $0D
+    jr  z, .return                                        ; $3046: $C8
+
+    ld   a, l                                     ; $3047: $7D
+    and  $F0                                      ; $3048: $E6 $F0
+    add  $21                                      ; $304A: $C6 $21
+    ld   l, a                                     ; $304C: $6F
+    ld   e, a                                     ; $304D: $5F
+    jr   .nextRow                                 ; $304E: $18 $E7
+
+.jr_000_3050:
+    ldh  a, [$FF9C]                               ; $3050: $F0 $9C
+    cp   $00                                      ; $3052: $FE $00
+    jr   nz, .jr_000_307B                          ; $3054: $20 $25
+
+    ;ld   a, $01                                   ; $3056: $3E $01
+    ;ldh  [$FF9C], a                               ; $3058: $E0 $9C
+    ld   hl, $9941                                ; $305A: $21 $41 $99
+    ld   de, $C941                                ; $305D: $11 $41 $C9
+    ld   c, $05                                   ; $3060: $0E $05
+
+.jr_000_3062:
+    ld   b, $08                                   ; $3062: $06 $08
+
+.jr_000_3064:
+    ld   a, [de]                                  ; $3064: $1A
+    and a, 7
+
+.jr_000_306B:
+    ld   [hl+], a                                 ; $306B: $22
+    inc  de                                       ; $306C: $13
+    dec  b                                        ; $306D: $05
+    jr   nz, .jr_000_3064                          ; $306E: $20 $F4
+
+    dec  c                                        ; $3070: $0D
+    jr z, .return                                        ; $3071: $C8
+
+    ld   a, l                                     ; $3072: $7D
+    and  $F0                                      ; $3073: $E6 $F0
+    add  $21                                      ; $3075: $C6 $21
+    ld   l, a                                     ; $3077: $6F
+    ld   e, a                                     ; $3078: $5F
+    jr   .jr_000_3062                              ; $3079: $18 $E7
+
+.jr_000_307B:
+    ;ld   a, $00                                   ; $307B: $3E $00
+    ;ldh  [$FF9C], a                               ; $307D: $E0 $9C
+    ld   hl, $9861                                ; $307F: $21 $61 $98
+    ld   de, $C861                                ; $3082: $11 $61 $C8
+    ld   c, $05                                   ; $3085: $0E $05
+
+.jr_000_3087:
+    ld   b, $06                                   ; $3087: $06 $06
+
+.jr_000_3089:
+    ld   a, [de]                                  ; $3089: $1A
+    ;and a, 7
+
+.jr_000_3090:
+    ld   [hl+], a                                 ; $3090: $22
+    inc  de                                       ; $3091: $13
+    dec  b                                        ; $3092: $05
+    jr   nz, .jr_000_3089                          ; $3093: $20 $F4
+
+    dec  c                                        ; $3095: $0D
+    jr   z, :+                                    ; $3096: $28 $09
+
+    ld   a, l                                     ; $3098: $7D
+    and  $F0                                      ; $3099: $E6 $F0
+    add  $21                                      ; $309B: $C6 $21
+    ld   l, a                                     ; $309D: $6F
+    ld   e, a                                     ; $309E: $5F
+    jr   .jr_000_3087                              ; $309F: $18 $E6
+
+:   ld   hl, $9901                                ; $30A1: $21 $01 $99
+    ld   de, $C901                                ; $30A4: $11 $01 $C9
+    ld   c, $02                                   ; $30A7: $0E $02
+
+:   ld   b, $06                                   ; $30A9: $06 $06
+
+:   ld   a, [de]                                  ; $30AB: $1A
+    and a, 7
+
+:   ld   [hl+], a                                 ; $30B2: $22
+    inc  de                                       ; $30B3: $13
+    dec  b                                        ; $30B4: $05
+    jr   nz, :--                                  ; $30B5: $20 $F4
+
+    dec  c                                        ; $30B7: $0D
+    jr z, .return                                        ; $30B8: $C8
+
+    ld   a, l                                     ; $30B9: $7D
+    and  $F0                                      ; $30BA: $E6 $F0
+    add  $21                                      ; $30BC: $C6 $21
+    ld   l, a                                     ; $30BE: $6F
+    ld   e, a                                     ; $30BF: $5F
+    jr   :---                                     ; $30C0: $18 $E7
+
+.return:
+    xor a
+    ld [wCurrentVBK], a
+    ld [rVBK], a
+    ret
+
+
+
+
+
+
+
+
+;PushStartToDrawCommand::
+;    DB   $98, $61, %01000000 | $0A, " "
+;
+;    DB   $98, $81, $0A
+;    DB   "    PUSH  "
+;
+;    DB   $98, $A1, %01000000 | $0A, " "
+;
+;    DB   $98, $C1, $0A
+;    DB   "   START  "
+;
+;    DB   $98, $E1, %01000000 | $0A, " "
+;
+;    DB   $99, $01, $0A
+;    DB   "     TO   "
+;
+;    DB   $FF
+;    DB   $98, $61, %01000000 | $0A, $00
+;    DB   $98, $81, %01000000 | $0A, $00
+;    DB   $98, $A1, %01000000 | $0A, $00
+;    DB   $98, $C1, %01000000 | $0A, $00
+;    DB   $98, $E1, %01000000 | $0A, $00
+;    DB   $99, $01, %01000000 | $0A, $00
+;
+;    DB   $00
+
+
+
+;   - bit 7:    1 for vertical drawing, 0 for horizontal
+;   - bit 6:    1 to repeat one tile, 0 to draw a series of tiles
+;   - bits 5-0: Length (number of tiles to draw)
+
+;ContinueGameDrawCommand::
+;    DB   $99, $21, %01000000 | $0A, " "
+;
+;    DB   $99, $41, $0A
+;    DB   "  CONTINUE"
+;
+;    DB   $99, $61, %01000000 | $0A, " "
+;
+;    DB   $99, $81, $0A
+;    DB   "    GAME  "
+;
+;    DB   $99, $A1, %01000000 | $0A, " "
+;    DB   $99, $C1, %01000000 | $0A, " "
+;
+;    DB   $FF
+;    DB   $99, $21, %01000000 | $0A, $00
+;    DB   $99, $41, %01000000 | $0A, $00
+;    DB   $99, $61, %01000000 | $0A, $00
+;    DB   $99, $81, %01000000 | $0A, $00
+;
+;    DB   $00
+
+ClearPalettes::
+;    ld   a, 3
+;    ld   [rSVBK], a
+;    ld   [rCurrentSVBK], a
+
+    ld   a, 1
+    ld   [rVBK], a
+    ld   [wCurrentVBK], a
+
+    ld   hl, $9BFF                                ; $2CCA: $21 $FF $9B
+    ld   bc, $0400                                ; $2CCD: $01 $00 $04
+
+:   xor  a
+    ld   [hl-], a                                 ; $2CD2: $32
+    dec  bc                                       ; $2CD3: $0B
+    ld   a, b                                     ; $2CD4: $78
+    or   c                                        ; $2CD5: $B1
+    jr   nz, :-                                   ; $2CD6: $20 $F8
+
+    ld   [wCurrentVBK], a
+    ld   [rVBK], a
+
+    ret                                           ; $2CD8: $C9
+
+BlankPalettesInPlayArea:
+    ldh  a, [hIE2]
+    cp   $11
+    jr nz, .done
+
+    ldh  [rVBK], a
+
+    ; TODO This is $FF in Japan
+    ld a, $7F
+    ldh [$FF51], a
+    ld a, $00
+    ldh [$FF52], a
+    ld a, $99
+    ldh [$FF53], a
+    ld a, $20
+    ldh [$FF54], a
+    ld a, 8
+    ldh [$FF55], a
+
+    xor  a
+    ldh  [rVBK], a            ; $050C: $C3 $C3 $03
+.done:
+    jp VBlankInterruptHandler.vBlankDone
+
+DrawBlockNextToBlob:
+    ld   hl, $99CB                                ; $03BC: $21 $CB $99
+    ld   a, [$C00A]                               ; $03BF: $FA $0A $C0
+    ld   [hl], a                                  ; $03C2: $77
+    ldh  a, [hIE2]
+    cp   $11
+    ret  nz
+    ld   a, 1
+    ld   [rVBK], a
+    ld   a, [$C00A]                               ; $03BF: $FA $0A $C0
+    and  a, 7
+    ld   [hl], a
+    xor  a
+    ld   [rVBK], a
+    ld   [$C007], a ; zero out palette for old block OAM
+    ret
+
+UnpausePal1:
+    ; Set tile attributes for upper play area after pause
+    ; (we don't convert from tiles to palettes here because
+    ; we want BG priority)
+    ldh a, [hIE2]
+    cp $11
+    jr nz, .done
+
+    ld a, 1
+    ld [rVBK], a
+    ld   hl, $9861                                ; $0511: $21 $61 $98
+    ld   de, $C861                                ; $0514: $11 $61 $C8
+    ld   b, $07                                   ; $0517: $06 $07
+    call MemCpyDEtoHLShort                             ; $0519: $CD $C2 $30
+    ld   hl, $9881                                ; $051C: $21 $81 $98
+    ld   de, $C881                                ; $051F: $11 $81 $C8
+    ld   b, $0A                                   ; $0522: $06 $0A
+    call MemCpyDEtoHLShort                             ; $0524: $CD $C2 $30
+    ld   hl, $98A1                                ; $0527: $21 $A1 $98
+    ld   de, $C8A1                                ; $052A: $11 $A1 $C8
+    ld   b, $07                                   ; $052D: $06 $07
+    call MemCpyDEtoHLShort                             ; $052F: $CD $C2 $30
+    ld   hl, $98C1                                ; $0532: $21 $C1 $98
+    ld   de, $C8C1                                ; $0535: $11 $C1 $C8
+    ld   b, $0A                                   ; $0538: $06 $0A
+    call MemCpyDEtoHLShort                             ; $053A: $CD $C2 $30
+    ld   hl, $98E1                                ; $053D: $21 $E1 $98
+    ld   de, $C8E1                                ; $0540: $11 $E1 $C8
+    ld   b, $07                                   ; $0543: $06 $07
+    call MemCpyDEtoHLShort                             ; $0545: $CD $C2 $30
+    ld   hl, $9901                                ; $0548: $21 $01 $99
+    ld   de, $C901                                ; $054B: $11 $01 $C9
+    ld   b, $0A                                   ; $054E: $06 $0A
+    call MemCpyDEtoHLShort                             ; $0550: $CD $C2 $30
+    xor a
+    ld [rVBK], a
+.done:
+    jp   VBlankInterruptHandler.vBlankDone                              ; $0557: $C3 $C3 $03
+
+UnpausePal2:
+    ; Reset tile attributes in lower play area after pause
+    ldh a, [hIE2]
+    cp $11
+    jr nz, .done
+
+    ld a, 1
+    ld [rVBK], a
+    ld   hl, $9921                                ; $055A: $21 $21 $99
+    ld   de, $C921                                ; $055D: $11 $21 $C9
+    ld   b, $07                                   ; $0560: $06 $07
+    call DrawPalFromWRAM                             ; $0562: $CD $C2 $30
+    ld   hl, $9941                                ; $0565: $21 $41 $99
+    ld   de, $C941                                ; $0568: $11 $41 $C9
+    ld   b, $0A                                   ; $056B: $06 $0A
+    call DrawPalFromWRAM                             ; $056D: $CD $C2 $30
+    ld   hl, $9961                                ; $0570: $21 $61 $99
+    ld   de, $C961                                ; $0573: $11 $61 $C9
+    ld   b, $07                                   ; $0576: $06 $07
+    call DrawPalFromWRAM                             ; $0578: $CD $C2 $30
+    ld   hl, $9981                                ; $057B: $21 $81 $99
+    ld   de, $C981                                ; $057E: $11 $81 $C9
+    ld   b, $0A                                   ; $0581: $06 $0A
+    call DrawPalFromWRAM                             ; $0583: $CD $C2 $30
+    ld   hl, $99A1                                ; $0586: $21 $A1 $99
+    ld   de, $C9A1                                ; $0589: $11 $A1 $C9
+    ld   b, $07                                   ; $058C: $06 $07
+    call DrawPalFromWRAM                             ; $058E: $CD $C2 $30
+    ld   hl, $99C1                                ; $0591: $21 $C1 $99
+    ld   de, $C9C1                                ; $0594: $11 $C1 $C9
+    ld   b, $07                                   ; $0597: $06 $07
+    call DrawPalFromWRAM                             ; $0599: $CD $C2 $30
+    xor a
+    ld [rVBK], a
+.done:
+    jp   VBlankInterruptHandler.vBlankDone                              ; $05A0: $C3 $C3 $03
+
+;include "dx.asm"
+
+InitNewCheatGame::
+    ld   hl, hCredits                             ; $2D41: $21 $C4 $FF
+    ld   a, $FF                                   ; $2D44: $3E $03
+    ld   [hl+], a                                 ; $2D46: $22
+
+.continue
+    ld   a, $FF                                   ; $2D47: $3E $02
+    ld   [hl+], a                                 ; $2D49: $22
+    ld   a, $09                                   ; $2D4A: $3E $01
+    ld   [hl+], a                                 ; $2D4C: $22
+    ld   a, $00                                   ; $2D4D: $3E $00
+    ;ld   [hl+], a                                 ; $2D4F: $22
+    ld   [hl], a                                  ; $2D50: $77
+    ldh  [$FFAC], a                               ; $2D51: $E0 $AC
+    ldh  [$FFC2], a                               ; $2D53: $E0 $C2
+    jp LoadStage
+
+CheckTimerInterruptFrame:
+    push af                                       ; $05A3: $F5
+    push bc                                       ; $05A4: $C5
+    push de                                       ; $05A5: $D5
+    push hl                                       ; $05A6: $E5
+
+    ldh a, [hIE2]
+    cp $11
+    jp nz, TimerInterruptHandler.run
+
+    ld a, [$C090]
+    cp $00
+    jr z, .flipFrameAndRun
+
+    xor a
+    ld [$C090], a
+    jp TimerInterruptHandler.return
+
+.flipFrameAndRun
+    ld a, $FF
+    ld [$C090], a
+    jp TimerInterruptHandler.run
+
+SECTION "DX tiles", ROMX, BANK[2]
+TilesDX::
+    INCBIN "gfx/TilesDX.2bpp"
